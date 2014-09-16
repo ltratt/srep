@@ -1,0 +1,250 @@
+#! /usr/bin/env python2.7
+
+# Copyright (C)2003-2011 Laurence Tratt <http://tratt.net/laurie/>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+
+# http://tratt.net/laurie/src/srep/
+#
+# This utility does a "search and replace" over a group of files, replacing
+# one piece of text T with another T'. Output is either: a unified diff sent
+# to stdout (i.e. without modifying files) with "-u"; or the direct
+# modification of the files with "-m". If no flag is specified, "-u" is
+# assumed, since it is non-destructive.
+
+
+import difflib, getopt, os, re, stat, sys, time
+
+PROG_NAME = "srep"
+
+_PATCH_NONE = 0
+_PATCH_UNIFIED = 1
+_PATCH_NDIFF = 2
+
+
+
+class SREP:
+    def __init__(self):
+        opts, args = getopt.getopt(sys.argv[1 : ], "rvmnuht:")
+
+        self._recurse = 0
+        self._interactive = 0
+        self._verbose = 0
+        self._produce_patch = _PATCH_UNIFIED
+        num_replaces = 1
+        for opt in opts:
+            if opt[0] == "-r":
+                self._recurse = 1
+            elif opt[0] == "-v":
+                self._verbose = 1
+            elif opt[0] == "-m":
+                self._produce_patch = _PATCH_NONE
+            elif opt[0] == "-n":
+                self._produce_patch = _PATCH_NDIFF
+            elif opt[0] == "-u":
+                self._produce_patch = _PATCH_UNIFIED
+            elif opt[0] == "-t":
+                num_replaces = int(opt[1])
+            elif opt[0] == "-h":
+                self.usage()
+            else:
+                self.usage("Error: Unknown arg '%s'" % opt[0])
+
+        if len(args) < 3:
+            self.usage("Insufficient number of args")
+
+        self._replaces = []
+        for i in range(0, num_replaces):
+            pattern = re.compile(args[i * 2], re.DOTALL | re.MULTILINE)
+            replace = args[i * 2 + 1]
+            self._replaces.append([pattern, replace])
+
+        for file_name in args[num_replaces * 2 : ]:
+            if os.path.isdir(file_name):
+                self.recurse(file_name)
+            else:
+                self.process_file(file_name)
+
+
+    def usage(self, msg = None):
+        if msg is None:
+            msg = ""
+        else:
+            msg = msg + "\n\n"
+
+        sys.stderr.write("""Usage: %s%s [-rivnu] [-t <number of expression + replacements>] <regular expression 1> <replacement 1> [... <regular expression t> <replacement t>] <file 1> ... <file n>\n""" % (msg, PROG_NAME))
+        sys.exit(1)
+
+
+    def log(self, msg):
+        if self._verbose:
+            sys.stderr.write("%s" % msg)
+
+
+    def recurse(self, dir_name):
+        self.log("Recursing into %s.\n" % dir_name)
+        for leaf_name in os.listdir(dir_name):
+            file_name = os.path.join(dir_name, leaf_name)
+            if os.path.isdir(file_name):
+                self.recurse(file_name)
+                continue
+            else:
+                self.process_file(file_name)
+
+
+    def process_file(self, file_name):
+        self.log("Processing %s.\n" % file_name)
+
+        file = open(file_name, "r")
+        file_data = file.read(-1)
+        file.close()
+        if self._produce_patch:
+            original_file_data = file_data
+
+        i = 0
+        old_file_data = file_data
+        for pattern, replace in self._replaces:
+            file_data = pattern.sub(replace, file_data)
+        if file_data != old_file_data:
+            changed = 1
+        else:
+            changed = 0
+
+        file_mdate = time.ctime(os.stat(file_name)[stat.ST_MTIME])
+        if changed:
+            self.log("(%s replace operations).\n" % `changed`)
+            if self._produce_patch == _PATCH_NDIFF:
+                line = "--- %s " % file_name
+                line += " " * (15 - len(line))
+                line += file_mdate
+                print line
+                line = "+++ %s " % file_name
+                line += " " * (15 - len(line))
+                line += file_mdate
+                print line
+                ndiff = "\n".join(difflib.ndiff( \
+                  original_file_data.splitlines(), file_data.splitlines()))
+                print self.ndiff_to_unified_diff(ndiff)
+            elif self._produce_patch == _PATCH_UNIFIED:
+                print "\n".join(difflib.unified_diff( \
+                  original_file_data.splitlines(), file_data.splitlines(), \
+                  file_name, file_name, file_mdate, file_mdate, lineterm=""))
+            else:
+                file = open(file_name, "w")
+                file.write(file_data)
+                file.close()
+        else:
+            self.log("(not changed).\n")
+
+
+
+    def ndiff_to_unified_diff(self, ndiff):
+        output = []
+
+        # ndiff adds an extra space after the "+- " chars which confuses patch.
+        # They need to be removed; we also strip the extra space after "?" to
+        # ensure that things line up correctly.
+
+        tlines = ndiff.splitlines(1)
+        i = 0
+        lines = []
+        while i < len(tlines):
+            if tlines[i][0 : 2] == "+ ":
+                lines.append("+" + tlines[i][2 : ])
+            elif tlines[i][0 : 2] == "- ":
+                lines.append("-" + tlines[i][2 : ])
+            elif tlines[i][0 : 2] == "  ":
+                lines.append(" " + tlines[i][2 : ])
+            elif tlines[i][0 : 2] == "? ":
+                lines.append("?" + tlines[i][2 : ])
+            else:
+                lines.append(tlines[i])
+            i += 1
+
+        i = 0
+        last = 0
+        in_real_line = 1
+        out_real_line = 1
+        while i < len(lines):
+            if lines[i][0] in ["+", "-"]:
+                j = i - 1
+                while j > i - 3 and lines[j][0] == " ":
+                    j -= 1
+                context = i - j
+                while in_real_line - context < 0 or out_real_line - context < 0:
+                    context -= 1
+
+                chunk = []
+                chunk.extend(lines[i - context : i])
+                original_in_real_line = in_real_line
+                original_out_real_line = out_real_line
+                while i < len(lines) and lines[i][0] in ["+", "-", "?"]:
+                    if lines[i][0] == "+":
+                        out_real_line += 1
+                    elif lines[i][0] == "-":
+                        in_real_line += 1
+                    chunk.append(lines[i])
+                    i += 1
+                while i < len(lines):
+                    j = i
+                    while i < len(lines) and i < j + 3 and lines[i][0] == " ":
+                        in_real_line += 1
+                        out_real_line += 1
+                        chunk.append(lines[i])
+                        i += 1
+                    if not (i < len(lines) and i < j + 3):
+                        k = i
+                        while k < len(lines) and k < j + 6 and lines[k][0] == " ":
+                            k += 1
+                        if k == j + 6:
+                            break
+                        j = i
+                        while i < len(lines) and i < j + 3 and lines[i][0] == " ":
+                            in_real_line += 1
+                            out_real_line += 1
+                            chunk.append(lines[i])
+                            i += 1
+                    while i < len(lines) and lines[i][0] != " ":
+                        if lines[i][0] == "+":
+                            out_real_line += 1
+                        elif lines[i][0] == "-":
+                            in_real_line += 1
+                        chunk.append(lines[i])
+                        i += 1
+                output.append("@@ -%s,%s +%s,%s @@\n" % \
+                  (original_in_real_line - context, \
+                  in_real_line - original_in_real_line + context, \
+                  original_out_real_line - context, \
+                  out_real_line - original_out_real_line + context))
+                output.extend(chunk)
+                last = in_real_line
+            elif len(lines[i]) > 2 and lines[i][0] == " ":
+                in_real_line += 1
+                out_real_line += 1
+                i += 1
+            else:
+                i += 1
+
+        return "".join(output)
+
+
+
+if __name__ == "__main__":
+    SREP()

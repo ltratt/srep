@@ -1,0 +1,26 @@
+================================================================================
+  srep                                                      Laurence Tratt
+  http://tratt.net/laurie/src/srep/
+================================================================================
+
+srep (Search and REPlace) matches regular expressions in files and replaces them
+with a given string. Output is either: a unified diff sent to stdout (i.e.
+without modifying files) with -u; or the direct modification of the files with
+-m. If no flag is specified, -u is assumed, since it is non-destructive.
+
+
+The command-line arguments are as follows:
+  srep [-rvmnu] [-t <number of expression + replacements>] 
+    <regular expression 1> <replacement 1>
+    [... <regular expression t> <replacement t>]
+    <file 1> ... <file n>
+
+The flags are as follows:
+  -r	Recurse into (nested) directories.
+  -v	Create additional logging information (shows which files are being
+        matched, how many replacements made etc) and send it to stderr.
+  -m	Modify files in situ (warning: it may be difficult or impossible to undo
+        any changes made).
+  -n	Produce ndiff output (useful for seeing intra-line changes).
+  -u	Produce unified diff output (default).
+
