@@ -221,7 +221,7 @@ if __name__ == "__main__":
             '-s', nargs=2, action='append', dest="subs", metavar=("pat", "rep"),
             help='regex specification of the substitution')
     parser.add_argument(
-            'files', nargs=argparse.REMAINDER,
+            'files', nargs='*',
             help='files to replace in')
 
     opts = parser.parse_args()
