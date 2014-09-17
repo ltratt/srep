@@ -20,14 +20,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+"""
+This utility does a "search and replace" over a group of files, replacing
+one piece of text T with another T'.
 
-# http://tratt.net/laurie/src/srep/
-#
-# This utility does a "search and replace" over a group of files, replacing
-# one piece of text T with another T'. Output is either: a unified diff sent
-# to stdout (i.e. without modifying files) with "-u"; or the direct
-# modification of the files with "-m". If no flag is specified, "-u" is
-# assumed, since it is non-destructive.
+http://tratt.net/laurie/src/srep/
+"""
 
 
 import difflib, getopt, os, re, stat, sys, time, argparse, itertools
@@ -201,9 +199,29 @@ class SREP:
         return "".join(output)
 
 
+EPILOG = """
+Examples:
+
+Emit a unified diff that replaces all occurances of 'jim' with 'bob' in
+the file '/etc/passwd':
+
+  $ srep -s 'jim' 'bob' /etc/passwd
+
+Emit an ndiff diff that replaces all occurances of 'jim' with 'bob' and
+'tom' with 'sally' in the file '/etc/passwd':
+
+  $ srep -s 'jim' 'bob' -s 'tom' 'sally' /etc/passwd
+
+Prepend (on-disk) the bodies of HTML title tags with the text 'XXX: ' in
+the file 'test.html':
+
+  $ python2.7 srep -m -s \\
+          '<title>(.*)</title>' '<title>XXX: \\1</title>' test.html
+"""
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+            description=__doc__, epilog=EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument(
             '-r', action='store_true', dest='recurse',
