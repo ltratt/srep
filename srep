@@ -30,7 +30,7 @@
 # assumed, since it is non-destructive.
 
 
-import difflib, getopt, os, re, stat, sys, time
+import difflib, getopt, os, re, stat, sys, time, argparse, itertools
 
 PROG_NAME = "srep"
 
@@ -38,63 +38,22 @@ _PATCH_NONE = 0
 _PATCH_UNIFIED = 1
 _PATCH_NDIFF = 2
 
-
-
 class SREP:
-    def __init__(self):
-        opts, args = getopt.getopt(sys.argv[1 : ], "rvmnuht:")
+    def __init__(self, opts):
+        self.opts = opts
 
-        self._recurse = 0
-        self._interactive = 0
-        self._verbose = 0
-        self._produce_patch = _PATCH_UNIFIED
-        num_replaces = 1
-        for opt in opts:
-            if opt[0] == "-r":
-                self._recurse = 1
-            elif opt[0] == "-v":
-                self._verbose = 1
-            elif opt[0] == "-m":
-                self._produce_patch = _PATCH_NONE
-            elif opt[0] == "-n":
-                self._produce_patch = _PATCH_NDIFF
-            elif opt[0] == "-u":
-                self._produce_patch = _PATCH_UNIFIED
-            elif opt[0] == "-t":
-                num_replaces = int(opt[1])
-            elif opt[0] == "-h":
-                self.usage()
-            else:
-                self.usage("Error: Unknown arg '%s'" % opt[0])
+        self._replaces = [
+            (re.compile(pat, re.DOTALL | re.MULTILINE), repl) for
+            (pat, repl) in opts.subs ]
 
-        if len(args) < 3:
-            self.usage("Insufficient number of args")
-
-        self._replaces = []
-        for i in range(0, num_replaces):
-            pattern = re.compile(args[i * 2], re.DOTALL | re.MULTILINE)
-            replace = args[i * 2 + 1]
-            self._replaces.append([pattern, replace])
-
-        for file_name in args[num_replaces * 2 : ]:
+        for file_name in self.opts.files:
             if os.path.isdir(file_name):
                 self.recurse(file_name)
             else:
                 self.process_file(file_name)
 
-
-    def usage(self, msg = None):
-        if msg is None:
-            msg = ""
-        else:
-            msg = msg + "\n\n"
-
-        sys.stderr.write("""Usage: %s%s [-rivnu] [-t <number of expression + replacements>] <regular expression 1> <replacement 1> [... <regular expression t> <replacement t>] <file 1> ... <file n>\n""" % (msg, PROG_NAME))
-        sys.exit(1)
-
-
     def log(self, msg):
-        if self._verbose:
+        if self.opts.verbose:
             sys.stderr.write("%s" % msg)
 
 
@@ -115,8 +74,7 @@ class SREP:
         file = open(file_name, "r")
         file_data = file.read(-1)
         file.close()
-        if self._produce_patch:
-            original_file_data = file_data
+        original_file_data = file_data
 
         i = 0
         old_file_data = file_data
@@ -130,7 +88,7 @@ class SREP:
         file_mdate = time.ctime(os.stat(file_name)[stat.ST_MTIME])
         if changed:
             self.log("(%s replace operations).\n" % `changed`)
-            if self._produce_patch == _PATCH_NDIFF:
+            if self.opts.ndiff and not self.opts.modify:
                 line = "--- %s " % file_name
                 line += " " * (15 - len(line))
                 line += file_mdate
@@ -142,11 +100,11 @@ class SREP:
                 ndiff = "\n".join(difflib.ndiff( \
                   original_file_data.splitlines(), file_data.splitlines()))
                 print self.ndiff_to_unified_diff(ndiff)
-            elif self._produce_patch == _PATCH_UNIFIED:
+            elif not self.opts.ndiff and not self.opts.modify:
                 print "\n".join(difflib.unified_diff( \
                   original_file_data.splitlines(), file_data.splitlines(), \
                   file_name, file_name, file_mdate, file_mdate, lineterm=""))
-            else:
+            else: # self.opts.modify is True
                 file = open(file_name, "w")
                 file.write(file_data)
                 file.close()
@@ -247,4 +205,35 @@ class SREP:
 
 
 if __name__ == "__main__":
-    SREP()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+            '-r', action='store_true', dest='recurse',
+            help='operate recursively')
+    parser.add_argument(
+            '-v', action='store_true', dest='verbose',
+            help='verbose output')
+    parser.add_argument(
+            '-m', action='store_true', dest='modify',
+            help='modify in-place')
+    parser.add_argument(
+            '-n', action='store_true', dest='ndiff',
+            help='emit ndiff instead of unified diff')
+    parser.add_argument(
+            '-s', nargs=2, action='append', dest="subs", metavar=("pat", "rep"),
+            help='regex specification of the substitution')
+    parser.add_argument(
+            'files', nargs=argparse.REMAINDER,
+            help='files to replace in')
+
+    opts = parser.parse_args()
+
+    if not opts.files:
+        print("error: No files passed")
+        exit(os.EX_USAGE)
+
+    if not opts.subs:
+        print("error: No files passed")
+        exit(os.EX_USAGE)
+
+    SREP(opts)
