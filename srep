@@ -249,7 +249,7 @@ if __name__ == "__main__":
         exit(os.EX_USAGE)
 
     if not opts.subs:
-        print("error: No files passed")
+        print("error: No substitutions passed")
         exit(os.EX_USAGE)
 
     SREP(opts)
