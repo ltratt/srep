@@ -228,7 +228,7 @@ the file 'test.html':
 # Note that -s can be supplied many times, but the message does not
 # reflect this.
 CUSTOM_USAGE = \
-        "srep [-hrvmn] -s pat_1 rep_1 [... -s pat_n rep_n] file_1 [... file_n]]"
+        "srep [-hrvmn] -s pat_1 rep_1 [... -s pat_n rep_n] file_1 [... file_n]"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
