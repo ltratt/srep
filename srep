@@ -219,10 +219,25 @@ the file 'test.html':
           '<title>(.*)</title>' '<title>XXX: \\1</title>' test.html
 """
 
+
+# We use a custom usage string since argparse gets it wrong.
+#
+# Argparse gives:
+#   usage: srep [-h] [-r] [-v] [-m] [-n] [-s pat rep] [files [files ...]]
+#
+# Note that -s can be supplied many times, but the message does not
+# reflect this.
+CUSTOM_USAGE = \
+        "srep [-h] [-r] [-v] [-m] [-n] \n       " + \
+        "-s pat_1 rep_1 [... -s pat_n rep_n] file_1 [... file_n]]"
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-            description=__doc__, epilog=EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
+            description=__doc__, epilog=EPILOG,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            usage=CUSTOM_USAGE)
 
+    # When adding new args don't forget to update the CUSTOM_USAGE string.
     parser.add_argument(
             '-r', action='store_true', dest='recurse',
             help='operate recursively')
