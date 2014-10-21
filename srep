@@ -67,7 +67,12 @@ class SREP:
 
         self.log("Processing %s.\n" % file_name)
 
-        file = open(file_name, "r")
+        try:
+            file = open(file_name, "r")
+        except IOError as e:
+            sys.stdout.write("*warning: %s\n" % e)
+            return
+
         file_data = file.read(-1)
         file.close()
         original_file_data = file_data
@@ -101,7 +106,11 @@ class SREP:
                   original_file_data.splitlines(), file_data.splitlines(), \
                   file_name, file_name, file_mdate, file_mdate, lineterm=""))
             else: # self.opts.modify is True
-                file = open(file_name, "w")
+                try:
+                    file = open(file_name, "w")
+                except IOError as e:
+                    sys.stdout.write("*warning: %s" % e)
+                    return
                 file.write(file_data)
                 file.close()
         else:
