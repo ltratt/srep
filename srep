@@ -28,7 +28,7 @@ http://tratt.net/laurie/src/srep/
 """
 
 
-import difflib, getopt, os, re, stat, sys, time, argparse, itertools
+import difflib, os, re, stat, sys, time, argparse, itertools
 
 PROG_NAME = "srep"
 
